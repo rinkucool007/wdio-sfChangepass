@@ -16,12 +16,15 @@ class DataHandler {
   static getUsernames(): string[] {
     try {
       const csvPath = path.resolve(__dirname, '../../data/passwords.csv');
+      console.log('Reading CSV from:', csvPath);
       const csvContent = fs.readFileSync(csvPath, 'utf-8');
+      console.log('CSV Content:', csvContent);
       const records = parse(csvContent, {
         columns: true,
         skip_empty_lines: true
       });
       const usernames = records.map((record: { Username: string }) => record.Username);
+      console.log('Parsed Usernames:', usernames);
       if (!usernames || usernames.length === 0) {
         throw new Error('No usernames found in CSV file');
       }
@@ -34,7 +37,9 @@ class DataHandler {
   static getPassword(): string {
     try {
       const txtPath = path.resolve(__dirname, '../../data/password.txt');
-      return fs.readFileSync(txtPath, 'utf-8').trim();
+      const password = fs.readFileSync(txtPath, 'utf-8').trim();
+      console.log('Password:', password);
+      return password;
     } catch (error) {
       throw new Error(`Failed to read password from password.txt: ${error.message}`);
     }
@@ -43,7 +48,9 @@ class DataHandler {
   static getNewPassword(): string {
     try {
       const txtPath = path.resolve(__dirname, '../../data/newPassword.txt');
-      return fs.readFileSync(txtPath, 'utf-8').trim();
+      const newPassword = fs.readFileSync(txtPath, 'utf-8').trim();
+      console.log('New Password:', newPassword);
+      return newPassword;
     } catch (error) {
       throw new Error(`Failed to read new password from newPassword.txt: ${error.message}`);
     }
@@ -65,6 +72,7 @@ class SalesforcePage {
 
   async login(username: string, password: string) {
     try {
+      console.log(`Logging in with ${username}`);
       await this.usernameInput.setValue(username);
       await this.passwordInput.setValue(password);
       await this.loginButton.click();
@@ -76,6 +84,7 @@ class SalesforcePage {
 
   async goToChangePasswordScreen() {
     try {
+      console.log('Navigating to change password screen');
       await browser.url(URLS.CHANGE_PASSWORD);
       await browser.pause(2000);
     } catch (error) {
@@ -85,6 +94,7 @@ class SalesforcePage {
 
   async enterPasswordDetails(currentPassword: string, newPassword: string) {
     try {
+      console.log('Entering password details');
       await this.currentPasswordInput.setValue(currentPassword);
       await this.newPasswordInput.setValue(newPassword);
       await this.confirmPasswordInput.setValue(newPassword);
@@ -96,6 +106,7 @@ class SalesforcePage {
 
   async clickChangePassword() {
     try {
+      console.log('Clicking change password button');
       await this.changePasswordButton.click();
       await browser.pause(2000);
     } catch (error) {
@@ -105,6 +116,7 @@ class SalesforcePage {
 
   async goToLandingPage() {
     try {
+      console.log('Navigating to landing page');
       await browser.url(URLS.LANDING_PAGE);
       await browser.pause(2000);
     } catch (error) {
@@ -114,6 +126,7 @@ class SalesforcePage {
 
   async logout() {
     try {
+      console.log('Logging out');
       await this.userNavButton.click();
       await this.logoutLink.click();
       await browser.pause(2000);
@@ -139,33 +152,34 @@ describe('Salesforce Password Change Workflow', () => {
   let newPassword: string = '';
 
   before(async () => {
+    console.log('Running before hook');
     try {
       usernames = DataHandler.getUsernames();
       password = DataHandler.getPassword();
       newPassword = DataHandler.getNewPassword();
-      if (!Array.isArray(usernames)) {
-        throw new Error('Usernames is not an array');
+      console.log('Setup complete. Usernames:', usernames);
+      if (!Array.isArray(usernames) || usernames.length === 0) {
+        throw new Error('Usernames array is empty or invalid');
       }
     } catch (error) {
-      console.error(`Test setup failed: ${error.message}`);
-      throw error; // This will fail the test suite if setup fails
+      console.error(`Before hook failed: ${error.message}`);
+      throw error; // Ensure the test fails if setup fails
     }
   });
 
-  // Add a check to ensure we have usernames before proceeding
   beforeEach(async () => {
-    if (!usernames || usernames.length === 0) {
-      throw new Error('No usernames available to test');
-    }
+    console.log('Running beforeEach hook');
     try {
       await browser.url(URLS.LOGIN);
       await browser.pause(2000);
     } catch (error) {
+      console.error(`beforeEach failed: ${error.message}`);
       throw new Error(`Failed to navigate to login page: ${error.message}`);
     }
   });
 
   afterEach(async () => {
+    console.log('Running afterEach hook');
     try {
       await browser.deleteCookies();
       await browser.pause(2000);
@@ -174,41 +188,51 @@ describe('Salesforce Password Change Workflow', () => {
     }
   });
 
-  usernames.forEach((username) => {
-    describe(`Testing workflow for username: ${username}`, () => {
-      it('should complete all password change steps successfully', async () => {
-        try {
-          // Step 1: Login
-          await salesforcePage.login(username, password);
-          const isLoggedIn = await salesforcePage.isLoggedIn();
-          expect(isLoggedIn, `Login verification failed for ${username}`).to.be.true;
+  // Fallback test if usernames is empty
+  if (!usernames || usernames.length === 0) {
+    it('should fail due to no usernames available', () => {
+      throw new Error('No usernames loaded from CSV. Check data/passwords.csv');
+    });
+  } else {
+    usernames.forEach((username) => {
+      describe(`Testing workflow for username: ${username}`, () => {
+        it('should complete all password change steps successfully', async () => {
+          console.log(`Starting test for ${username}`);
+          try {
+            // Step 1: Login
+            await salesforcePage.login(username, password);
+            const isLoggedIn = await salesforcePage.isLoggedIn();
+            expect(isLoggedIn, `Login verification failed for ${username}`).to.be.true;
 
-          // Step 2: Go to change password screen
-          await salesforcePage.goToChangePasswordScreen();
+            // Step 2: Go to change password screen
+            await salesforcePage.goToChangePasswordScreen();
 
-          // Step 3: Enter password details
-          await salesforcePage.enterPasswordDetails(password, newPassword);
+            // Step 3: Enter password details
+            await salesforcePage.enterPasswordDetails(password, newPassword);
 
-          // Step 4: Click change password
-          await salesforcePage.clickChangePassword();
+            // Step 4: Click change password
+            await salesforcePage.clickChangePassword();
 
-          // Step 5: Go to landing page
-          await salesforcePage.goToLandingPage();
+            // Step 5: Go to landing page
+            await salesforcePage.goToLandingPage();
 
-          // Step 6: Logout
-          await salesforcePage.logout();
+            // Step 6: Logout
+            await salesforcePage.logout();
 
-          // Verify logout
-          await browser.url(URLS.LOGIN);
-          const isLoginPageDisplayed = await $('#username').isDisplayed();
-          expect(isLoginPageDisplayed, `Logout verification failed for ${username}`).to.be.true;
+            // Verify logout
+            await browser.url(URLS.LOGIN);
+            const isLoginPageDisplayed = await $('#username').isDisplayed();
+            expect(isLoginPageDisplayed, `Logout verification failed for ${username}`).to.be.true;
 
-          // Update password for next iteration
-          password = newPassword;
-        } catch (error) {
-          throw new Error(`Test failed for ${username}: ${error.message}`);
-        }
+            // Update password for next iteration
+            password = newPassword;
+            console.log(`Test completed successfully for ${username}`);
+          } catch (error) {
+            console.error(`Test failed for ${username}: ${error.message}`);
+            throw new Error(`Test failed for ${username}: ${error.message}`);
+          }
+        });
       });
     });
-  });
+  }
 });
