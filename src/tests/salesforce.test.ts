@@ -6,7 +6,9 @@ import * as path from 'path';
 // Constants
 const URLS = {
   LOGIN: 'https://login.salesforce.com',
-  LOGOUT: '/secur/logout.jsp'
+  LOGOUT: '/secur/logout.jsp',
+  CHANGE_PASSWORD: '/_ui/core/userprofile/ui/ChangePassword?retURL=/home',
+  LANDING_PAGE: '/home'
 };
 
 // Data Handler
@@ -45,77 +47,100 @@ class DataHandler {
 }
 
 // Page Objects
-class LoginPage {
+class SalesforcePage {
+  // Login Page Elements
   private get usernameInput() { return $('#username') }
   private get passwordInput() { return $('#password') }
   private get loginButton() { return $('#Login') }
 
-  async login(username: string, password: string) {
-    try {
-      await this.usernameInput.setValue(username);
-      await this.passwordInput.setValue(password);
-      await this.loginButton.click();
-    } catch (error) {
-      throw new Error(`Login failed: ${error.message}`);
-    }
-  }
-}
-
-class HomePage {
-  private get userNavButton() { return $('.userNavButton') }
-  private get logoutLink() { return $('=Logout') }
-
-  async logout() {
-    try {
-      await this.userNavButton.click();
-      await this.logoutLink.click();
-    } catch (error) {
-      throw new Error(`Logout failed: ${error.message}`);
-    }
-  }
-
-  async isLoggedIn(): Promise<boolean> {
-    try {
-      return await $('.userNavButton').isDisplayed();
-    } catch (error) {
-      throw new Error(`Failed to verify login status: ${error.message}`);
-    }
-  }
-}
-
-class ChangePasswordPage {
+  // Change Password Page Elements
   private get currentPasswordInput() { return $('xpath:///*[@id="currentpassword"]') }
   private get newPasswordInput() { return $('xpath:///*[@id="newpassword"]') }
   private get confirmPasswordInput() { return $('xpath:///*[@id="confirmpassword"]') }
   private get securityAnswerInput() { return $('xpath:///*[@id="answer"]') }
   private get changePasswordButton() { return $('xpath:///*[@id="password-button"]') }
 
-  async navigateToChangePassword() {
+  // Home Page Elements
+  private get userNavButton() { return $('.userNavButton') }
+  private get logoutLink() { return $('=Logout') }
+
+  // Step 1: Login
+  async login(username: string, password: string) {
     try {
-      await browser.url('/_ui/core/userprofile/ui/ChangePassword?retURL=/home');
+      await this.usernameInput.setValue(username);
+      await this.passwordInput.setValue(password);
+      await this.loginButton.click();
+      await browser.pause(2000);
     } catch (error) {
-      throw new Error(`Failed to navigate to change password page: ${error.message}`);
+      throw new Error(`Step 1 - Login failed: ${error.message}`);
     }
   }
 
-  async changePassword(currentPassword: string, newPassword: string) {
+  // Step 2: Navigate to Change Password
+  async goToChangePasswordScreen() {
+    try {
+      await browser.url(URLS.CHANGE_PASSWORD);
+      await browser.pause(2000);
+    } catch (error) {
+      throw new Error(`Step 2 - Navigation to change password failed: ${error.message}`);
+    }
+  }
+
+  // Step 3: Enter Password Details
+  async enterPasswordDetails(currentPassword: string, newPassword: string) {
     try {
       await this.currentPasswordInput.setValue(currentPassword);
       await this.newPasswordInput.setValue(newPassword);
       await this.confirmPasswordInput.setValue(newPassword);
       await this.securityAnswerInput.setValue('Juno Beach');
-      await this.changePasswordButton.click();
     } catch (error) {
-      throw new Error(`Password change failed: ${error.message}`);
+      throw new Error(`Step 3 - Entering password details failed: ${error.message}`);
+    }
+  }
+
+  // Step 4: Click Change Password
+  async clickChangePassword() {
+    try {
+      await this.changePasswordButton.click();
+      await browser.pause(2000);
+    } catch (error) {
+      throw new Error(`Step 4 - Change password button click failed: ${error.message}`);
+    }
+  }
+
+  // Step 5: Go to Landing Page
+  async goToLandingPage() {
+    try {
+      await browser.url(URLS.LANDING_PAGE);
+      await browser.pause(2000);
+    } catch (error) {
+      throw new Error(`Step 5 - Navigation to landing page failed: ${error.message}`);
+    }
+  }
+
+  // Step 6: Logout
+  async logout() {
+    try {
+      await this.userNavButton.click();
+      await this.logoutLink.click();
+      await browser.pause(2000);
+    } catch (error) {
+      throw new Error(`Step 6 - Logout failed: ${error.message}`);
+    }
+  }
+
+  async isLoggedIn(): Promise<boolean> {
+    try {
+      return await this.userNavButton.isDisplayed();
+    } catch (error) {
+      throw new Error(`Login verification failed: ${error.message}`);
     }
   }
 }
 
 // Test Suite
-describe('Salesforce Login/Change Password/Logout Test', () => {
-  const loginPage = new LoginPage();
-  const homePage = new HomePage();
-  const changePasswordPage = new ChangePasswordPage();
+describe('Salesforce Password Change Workflow', () => {
+  const salesforcePage = new SalesforcePage();
   let usernames: string[];
   let password: string;
   let newPassword: string;
@@ -131,7 +156,7 @@ describe('Salesforce Login/Change Password/Logout Test', () => {
   });
 
   usernames.forEach((username) => {
-    describe(`Testing with username: ${username}`, () => {
+    describe(`Testing workflow for username: ${username}`, () => {
       beforeEach(async () => {
         try {
           await browser.url(URLS.LOGIN);
@@ -150,29 +175,30 @@ describe('Salesforce Login/Change Password/Logout Test', () => {
         }
       });
 
-      it('should login, change password, and logout successfully', async () => {
+      it('should complete all password change steps successfully', async () => {
         try {
-          // Login
-          await loginPage.login(username, password);
-          await browser.pause(2000);
-          
-          // Verify login
-          const isLoggedIn = await homePage.isLoggedIn();
+          // Step 1: Login
+          await salesforcePage.login(username, password);
+          const isLoggedIn = await salesforcePage.isLoggedIn();
           expect(isLoggedIn, `Login verification failed for ${username}`).to.be.true;
 
-          // Change Password
-          await changePasswordPage.navigateToChangePassword();
-          await browser.pause(2000);
-          await changePasswordPage.changePassword(password, newPassword);
-          await browser.pause(2000);
+          // Step 2: Go to change password screen
+          await salesforcePage.goToChangePasswordScreen();
 
-          // Logout
-          await homePage.logout();
-          await browser.pause(2000);
+          // Step 3: Enter password details
+          await salesforcePage.enterPasswordDetails(password, newPassword);
+
+          // Step 4: Click change password
+          await salesforcePage.clickChangePassword();
+
+          // Step 5: Go to landing page
+          await salesforcePage.goToLandingPage();
+
+          // Step 6: Logout
+          await salesforcePage.logout();
 
           // Verify logout
           await browser.url(URLS.LOGIN);
-          await browser.pause(2000);
           const isLoginPageDisplayed = await $('#username').isDisplayed();
           expect(isLoginPageDisplayed, `Logout verification failed for ${username}`).to.be.true;
 
