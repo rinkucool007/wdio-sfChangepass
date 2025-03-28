@@ -16,20 +16,36 @@ class DataHandler {
   static getUsernames(): string[] {
     try {
       const csvPath = path.resolve(__dirname, '../../data/passwords.csv');
-      console.log('Reading CSV from:', csvPath);
+      console.log('Attempting to read CSV from:', csvPath);
+
+      // Check if file exists
+      if (!fs.existsSync(csvPath)) {
+        throw new Error(`CSV file not found at: ${csvPath}`);
+      }
+
       const csvContent = fs.readFileSync(csvPath, 'utf-8');
-      console.log('CSV Content:', csvContent);
+      console.log('Raw CSV Content:', csvContent);
+
+      if (!csvContent.trim()) {
+        throw new Error('CSV file is empty');
+      }
+
       const records = parse(csvContent, {
         columns: true,
         skip_empty_lines: true
       });
+      console.log('Parsed Records:', records);
+
       const usernames = records.map((record: { Username: string }) => record.Username);
-      console.log('Parsed Usernames:', usernames);
+      console.log('Extracted Usernames:', usernames);
+
       if (!usernames || usernames.length === 0) {
-        throw new Error('No usernames found in CSV file');
+        throw new Error('No usernames extracted from CSV');
       }
+
       return usernames;
     } catch (error) {
+      console.error(`Error in getUsernames: ${error.message}`);
       throw new Error(`Failed to read usernames from CSV: ${error.message}`);
     }
   }
@@ -37,9 +53,11 @@ class DataHandler {
   static getPassword(): string {
     try {
       const txtPath = path.resolve(__dirname, '../../data/password.txt');
-      const password = fs.readFileSync(txtPath, 'utf-8').trim();
-      console.log('Password:', password);
-      return password;
+      console.log('Reading password from:', txtPath);
+      if (!fs.existsSync(txtPath)) {
+        throw new Error(`Password file not found at: ${txtPath}`);
+      }
+      return fs.readFileSync(txtPath, 'utf-8').trim();
     } catch (error) {
       throw new Error(`Failed to read password from password.txt: ${error.message}`);
     }
@@ -48,9 +66,11 @@ class DataHandler {
   static getNewPassword(): string {
     try {
       const txtPath = path.resolve(__dirname, '../../data/newPassword.txt');
-      const newPassword = fs.readFileSync(txtPath, 'utf-8').trim();
-      console.log('New Password:', newPassword);
-      return newPassword;
+      console.log('Reading new password from:', txtPath);
+      if (!fs.existsSync(txtPath)) {
+        throw new Error(`New password file not found at: ${txtPath}`);
+      }
+      return fs.readFileSync(txtPath, 'utf-8').trim();
     } catch (error) {
       throw new Error(`Failed to read new password from newPassword.txt: ${error.message}`);
     }
@@ -163,7 +183,7 @@ describe('Salesforce Password Change Workflow', () => {
       }
     } catch (error) {
       console.error(`Before hook failed: ${error.message}`);
-      throw error; // Ensure the test fails if setup fails
+      throw error;
     }
   });
 
@@ -188,7 +208,6 @@ describe('Salesforce Password Change Workflow', () => {
     }
   });
 
-  // Fallback test if usernames is empty
   if (!usernames || usernames.length === 0) {
     it('should fail due to no usernames available', () => {
       throw new Error('No usernames loaded from CSV. Check data/passwords.csv');
