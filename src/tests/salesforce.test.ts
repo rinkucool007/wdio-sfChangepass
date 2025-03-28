@@ -21,7 +21,11 @@ class DataHandler {
         columns: true,
         skip_empty_lines: true
       });
-      return records.map((record: { Username: string }) => record.Username);
+      const usernames = records.map((record: { Username: string }) => record.Username);
+      if (!usernames || usernames.length === 0) {
+        throw new Error('No usernames found in CSV file');
+      }
+      return usernames;
     } catch (error) {
       throw new Error(`Failed to read usernames from CSV: ${error.message}`);
     }
@@ -48,23 +52,17 @@ class DataHandler {
 
 // Page Objects
 class SalesforcePage {
-  // Login Page Elements
   private get usernameInput() { return $('#username') }
   private get passwordInput() { return $('#password') }
   private get loginButton() { return $('#Login') }
-
-  // Change Password Page Elements
   private get currentPasswordInput() { return $('xpath:///*[@id="currentpassword"]') }
   private get newPasswordInput() { return $('xpath:///*[@id="newpassword"]') }
   private get confirmPasswordInput() { return $('xpath:///*[@id="confirmpassword"]') }
   private get securityAnswerInput() { return $('xpath:///*[@id="answer"]') }
   private get changePasswordButton() { return $('xpath:///*[@id="password-button"]') }
-
-  // Home Page Elements
   private get userNavButton() { return $('.userNavButton') }
   private get logoutLink() { return $('=Logout') }
 
-  // Step 1: Login
   async login(username: string, password: string) {
     try {
       await this.usernameInput.setValue(username);
@@ -76,7 +74,6 @@ class SalesforcePage {
     }
   }
 
-  // Step 2: Navigate to Change Password
   async goToChangePasswordScreen() {
     try {
       await browser.url(URLS.CHANGE_PASSWORD);
@@ -86,7 +83,6 @@ class SalesforcePage {
     }
   }
 
-  // Step 3: Enter Password Details
   async enterPasswordDetails(currentPassword: string, newPassword: string) {
     try {
       await this.currentPasswordInput.setValue(currentPassword);
@@ -98,7 +94,6 @@ class SalesforcePage {
     }
   }
 
-  // Step 4: Click Change Password
   async clickChangePassword() {
     try {
       await this.changePasswordButton.click();
@@ -108,7 +103,6 @@ class SalesforcePage {
     }
   }
 
-  // Step 5: Go to Landing Page
   async goToLandingPage() {
     try {
       await browser.url(URLS.LANDING_PAGE);
@@ -118,7 +112,6 @@ class SalesforcePage {
     }
   }
 
-  // Step 6: Logout
   async logout() {
     try {
       await this.userNavButton.click();
@@ -141,40 +134,48 @@ class SalesforcePage {
 // Test Suite
 describe('Salesforce Password Change Workflow', () => {
   const salesforcePage = new SalesforcePage();
-  let usernames: string[];
-  let password: string;
-  let newPassword: string;
+  let usernames: string[] = [];
+  let password: string = '';
+  let newPassword: string = '';
 
   before(async () => {
     try {
       usernames = DataHandler.getUsernames();
       password = DataHandler.getPassword();
       newPassword = DataHandler.getNewPassword();
+      if (!Array.isArray(usernames)) {
+        throw new Error('Usernames is not an array');
+      }
     } catch (error) {
-      throw new Error(`Test setup failed: ${error.message}`);
+      console.error(`Test setup failed: ${error.message}`);
+      throw error; // This will fail the test suite if setup fails
+    }
+  });
+
+  // Add a check to ensure we have usernames before proceeding
+  beforeEach(async () => {
+    if (!usernames || usernames.length === 0) {
+      throw new Error('No usernames available to test');
+    }
+    try {
+      await browser.url(URLS.LOGIN);
+      await browser.pause(2000);
+    } catch (error) {
+      throw new Error(`Failed to navigate to login page: ${error.message}`);
+    }
+  });
+
+  afterEach(async () => {
+    try {
+      await browser.deleteCookies();
+      await browser.pause(2000);
+    } catch (error) {
+      console.warn(`Failed to clear cookies: ${error.message}`);
     }
   });
 
   usernames.forEach((username) => {
     describe(`Testing workflow for username: ${username}`, () => {
-      beforeEach(async () => {
-        try {
-          await browser.url(URLS.LOGIN);
-          await browser.pause(2000);
-        } catch (error) {
-          throw new Error(`Failed to navigate to login page: ${error.message}`);
-        }
-      });
-
-      afterEach(async () => {
-        try {
-          await browser.deleteCookies();
-          await browser.pause(2000);
-        } catch (error) {
-          console.warn(`Failed to clear cookies: ${error.message}`);
-        }
-      });
-
       it('should complete all password change steps successfully', async () => {
         try {
           // Step 1: Login
